@@ -1,0 +1,60 @@
+[project]
+name = "sigil-notary"
+version = "0.2.0"
+description = "Cryptographic audit trails for AI agents"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.12"
+authors = [{name = "Chadd Harrison", email = "slythefoxvibes@proton.me"}]
+keywords = ["mcp", "agent", "audit-trail", "trust", "notary", "ed25519"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+mcp = [
+    "mcp[cli]>=1.0.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+    "respx>=0.22.0",
+]
+
+[project.urls]
+Homepage = "https://sigil-notary.dev"
+Repository = "https://github.com/sly-the-fox/sigil"
+Documentation = "https://sigil-notary.dev/docs"
+"Bug Tracker" = "https://github.com/sly-the-fox/sigil/issues"
+
+[project.scripts]
+sigil-notary = "mcp_server:main"
+
+[tool.setuptools]
+py-modules = ["mcp_server"]
+packages = ["sigil"]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
