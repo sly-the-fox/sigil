@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json_mod
 import re as _re_mod
 import uuid as _uuid_mod
 from dataclasses import dataclass, field
@@ -10,8 +11,11 @@ from typing import Any
 import httpx
 
 _AGENT_ID_RE = _re_mod.compile(r"^[a-zA-Z0-9_\-\.]{1,128}$")
+_ACTION_TYPE_RE = _re_mod.compile(r"^[a-zA-Z0-9_\-\.]{1,64}$")
 
 _MAX_ERROR_BODY = 200
+_MAX_PAYLOAD_BYTES = 10240
+_MAX_CHAIN_LIMIT = 1000
 
 
 class SigilError(Exception):
@@ -94,6 +98,55 @@ def _parse_receipt(r: dict) -> Receipt:
     )
 
 
+def _validate_attest_args(action_type: str, payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Validate attest arguments client-side. Returns the request body."""
+    if not _ACTION_TYPE_RE.match(action_type):
+        raise SigilError(
+            f"Invalid action_type: must match {_ACTION_TYPE_RE.pattern}, got {action_type!r}"
+        )
+    body = {"action_type": action_type, "payload": payload or {}}
+    if len(_json_mod.dumps(body)) > _MAX_PAYLOAD_BYTES:
+        raise SigilError(
+            f"Request body exceeds maximum size of {_MAX_PAYLOAD_BYTES} bytes"
+        )
+    return body
+
+
+def _validate_chain_args(agent_id: str, limit: int, after_seq: int) -> None:
+    """Validate get_chain arguments client-side."""
+    if not _AGENT_ID_RE.match(agent_id):
+        raise SigilError(
+            f"Invalid agent_id: must match {_AGENT_ID_RE.pattern}, got {agent_id!r}"
+        )
+    if not isinstance(limit, int) or limit < 1 or limit > _MAX_CHAIN_LIMIT:
+        raise SigilError(
+            f"Invalid limit: must be between 1 and {_MAX_CHAIN_LIMIT}, got {limit!r}"
+        )
+    if not isinstance(after_seq, int) or after_seq < 0:
+        raise SigilError(
+            f"Invalid after_seq: must be a non-negative integer, got {after_seq!r}"
+        )
+
+
+def _parse_verify_response(data: dict, receipt_id: str) -> VerifyResult:
+    """Parse verify response with field validation."""
+    try:
+        return VerifyResult(
+            valid=data["valid"], chain_valid=data["chain_valid"], receipt_id=receipt_id
+        )
+    except KeyError as exc:
+        raise SigilError("Malformed verify response: missing required fields") from exc
+
+
+def _parse_chain_response(data: dict) -> Chain:
+    """Parse chain response with field validation."""
+    try:
+        receipts = [_parse_receipt(r) for r in data["receipts"]]
+        return Chain(agent_id=data["agent_id"], length=data["length"], receipts=receipts)
+    except KeyError as exc:
+        raise SigilError("Malformed chain response: missing required fields") from exc
+
+
 class SigilClient:
     """Synchronous Sigil API client."""
 
@@ -117,9 +170,8 @@ class SigilClient:
         self.close()
 
     def attest(self, action_type: str, payload: dict[str, Any] | None = None) -> Receipt:
-        resp = self._client.post(
-            "/v1/attest", json={"action_type": action_type, "payload": payload or {}}
-        )
+        body = _validate_attest_args(action_type, payload)
+        resp = self._client.post("/v1/attest", json=body)
         data = _handle_response(resp)
         return _parse_receipt(data["receipt"])
 
@@ -132,21 +184,15 @@ class SigilClient:
             ) from exc
         resp = self._client.get(f"/v1/verify/{receipt_id}")
         data = _handle_response(resp)
-        return VerifyResult(
-            valid=data["valid"], chain_valid=data["chain_valid"], receipt_id=receipt_id
-        )
+        return _parse_verify_response(data, receipt_id)
 
     def get_chain(self, agent_id: str, limit: int = 100, after_seq: int = 0) -> Chain:
-        if not _AGENT_ID_RE.match(agent_id):
-            raise SigilError(
-                f"Invalid agent_id: must match {_AGENT_ID_RE.pattern}, got {agent_id!r}"
-            )
+        _validate_chain_args(agent_id, limit, after_seq)
         resp = self._client.get(
             f"/v1/chain/{agent_id}", params={"limit": limit, "after_seq": after_seq}
         )
         data = _handle_response(resp)
-        receipts = [_parse_receipt(r) for r in data["receipts"]]
-        return Chain(agent_id=data["agent_id"], length=data["length"], receipts=receipts)
+        return _parse_chain_response(data)
 
 
 class AsyncSigilClient:
@@ -172,9 +218,8 @@ class AsyncSigilClient:
         await self.aclose()
 
     async def attest(self, action_type: str, payload: dict[str, Any] | None = None) -> Receipt:
-        resp = await self._client.post(
-            "/v1/attest", json={"action_type": action_type, "payload": payload or {}}
-        )
+        body = _validate_attest_args(action_type, payload)
+        resp = await self._client.post("/v1/attest", json=body)
         data = _handle_response(resp)
         return _parse_receipt(data["receipt"])
 
@@ -187,18 +232,12 @@ class AsyncSigilClient:
             ) from exc
         resp = await self._client.get(f"/v1/verify/{receipt_id}")
         data = _handle_response(resp)
-        return VerifyResult(
-            valid=data["valid"], chain_valid=data["chain_valid"], receipt_id=receipt_id
-        )
+        return _parse_verify_response(data, receipt_id)
 
     async def get_chain(self, agent_id: str, limit: int = 100, after_seq: int = 0) -> Chain:
-        if not _AGENT_ID_RE.match(agent_id):
-            raise SigilError(
-                f"Invalid agent_id: must match {_AGENT_ID_RE.pattern}, got {agent_id!r}"
-            )
+        _validate_chain_args(agent_id, limit, after_seq)
         resp = await self._client.get(
             f"/v1/chain/{agent_id}", params={"limit": limit, "after_seq": after_seq}
         )
         data = _handle_response(resp)
-        receipts = [_parse_receipt(r) for r in data["receipts"]]
-        return Chain(agent_id=data["agent_id"], length=data["length"], receipts=receipts)
+        return _parse_chain_response(data)

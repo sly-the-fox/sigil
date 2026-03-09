@@ -331,3 +331,159 @@ async def test_async_get_chain_invalid_agent_id():
     async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
         with pytest.raises(SigilError, match="Invalid agent_id"):
             await client.get_chain("../../etc/passwd")
+
+
+# --- Audit 3, Fix 1: attest() validates action_type format ---
+
+
+def test_attest_invalid_action_type(client: SigilClient):
+    """Special characters in action_type are rejected client-side."""
+    with pytest.raises(SigilError, match="Invalid action_type"):
+        client.attest("bad!type@here")
+
+
+def test_attest_action_type_too_long(client: SigilClient):
+    """action_type >64 chars is rejected client-side."""
+    with pytest.raises(SigilError, match="Invalid action_type"):
+        client.attest("a" * 65)
+
+
+def test_attest_empty_action_type(client: SigilClient):
+    """Empty action_type is rejected client-side."""
+    with pytest.raises(SigilError, match="Invalid action_type"):
+        client.attest("")
+
+
+@pytest.mark.asyncio
+async def test_async_attest_invalid_action_type():
+    """Async: special characters in action_type are rejected client-side."""
+    async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
+        with pytest.raises(SigilError, match="Invalid action_type"):
+            await client.attest("bad!type")
+
+
+# --- Audit 3, Fix 2: get_chain() validates limit/after_seq bounds ---
+
+
+def test_get_chain_negative_limit(client: SigilClient):
+    with pytest.raises(SigilError, match="Invalid limit"):
+        client.get_chain("test-agent", limit=-1)
+
+
+def test_get_chain_zero_limit(client: SigilClient):
+    with pytest.raises(SigilError, match="Invalid limit"):
+        client.get_chain("test-agent", limit=0)
+
+
+def test_get_chain_excessive_limit(client: SigilClient):
+    with pytest.raises(SigilError, match="Invalid limit"):
+        client.get_chain("test-agent", limit=5000)
+
+
+def test_get_chain_negative_after_seq(client: SigilClient):
+    with pytest.raises(SigilError, match="Invalid after_seq"):
+        client.get_chain("test-agent", after_seq=-5)
+
+
+@pytest.mark.asyncio
+async def test_async_get_chain_negative_limit():
+    async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
+        with pytest.raises(SigilError, match="Invalid limit"):
+            await client.get_chain("test-agent", limit=-1)
+
+
+@pytest.mark.asyncio
+async def test_async_get_chain_excessive_limit():
+    async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
+        with pytest.raises(SigilError, match="Invalid limit"):
+            await client.get_chain("test-agent", limit=9999)
+
+
+@pytest.mark.asyncio
+async def test_async_get_chain_negative_after_seq():
+    async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
+        with pytest.raises(SigilError, match="Invalid after_seq"):
+            await client.get_chain("test-agent", after_seq=-1)
+
+
+# --- Audit 3, Fix 3: verify() response field validation ---
+
+
+@respx.mock
+def test_verify_malformed_response(client: SigilClient):
+    """Missing valid/chain_valid in verify response → SigilError."""
+    rid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    respx.get(f"{BASE_URL}/v1/verify/{rid}").mock(
+        return_value=httpx.Response(200, json={"status": "ok"})
+    )
+    with pytest.raises(SigilError, match="Malformed verify response"):
+        client.verify(rid)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_async_verify_malformed_response():
+    """Async: missing fields in verify response → SigilError."""
+    rid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    respx.get(f"{BASE_URL}/v1/verify/{rid}").mock(
+        return_value=httpx.Response(200, json={"valid": True})
+    )
+    async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
+        with pytest.raises(SigilError, match="Malformed verify response"):
+            await client.verify(rid)
+
+
+# --- Audit 3, Fix 4: get_chain() response field validation ---
+
+
+@respx.mock
+def test_get_chain_malformed_response(client: SigilClient):
+    """Missing agent_id/length/receipts in chain response → SigilError."""
+    agent = "test-agent"
+    respx.get(f"{BASE_URL}/v1/chain/{agent}").mock(
+        return_value=httpx.Response(200, json={"status": "ok"})
+    )
+    with pytest.raises(SigilError, match="Malformed chain response"):
+        client.get_chain(agent)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_async_get_chain_malformed_response():
+    """Async: missing fields in chain response → SigilError."""
+    agent = "test-agent"
+    respx.get(f"{BASE_URL}/v1/chain/{agent}").mock(
+        return_value=httpx.Response(200, json={"agent_id": agent})
+    )
+    async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
+        with pytest.raises(SigilError, match="Malformed chain response"):
+            await client.get_chain(agent)
+
+
+# --- Audit 3, Fix 5: attest() payload size validation ---
+
+
+@respx.mock
+def test_attest_oversized_payload(client: SigilClient):
+    """Payload >10KB is rejected client-side without hitting the server."""
+    big_payload = {"data": "x" * 11000}
+    with pytest.raises(SigilError, match="exceeds maximum size"):
+        client.attest("test_action", big_payload)
+
+
+@respx.mock
+def test_attest_none_payload(client: SigilClient):
+    """payload=None is accepted and sent as {} in the request."""
+    respx.post(f"{BASE_URL}/v1/attest").mock(
+        return_value=httpx.Response(200, json={"receipt": MOCK_RECEIPT})
+    )
+    receipt = client.attest("file_write", None)
+    assert receipt.action_type == "file_write"
+
+
+@pytest.mark.asyncio
+async def test_async_attest_oversized_payload():
+    """Async: payload >10KB is rejected client-side."""
+    async with AsyncSigilClient(api_key=API_KEY, base_url=BASE_URL) as client:
+        with pytest.raises(SigilError, match="exceeds maximum size"):
+            await client.attest("test_action", {"data": "x" * 11000})

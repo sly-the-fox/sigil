@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-03-09
+
+### Fixed
+- `mcp` is now a base dependency — `uvx sigil-notary` and `pip install sigil-notary` both work out of the box without needing `pip install sigil-notary[mcp]`
+- Added Smithery registry config (`smithery.yaml`) and MCP server card
+
 ## [0.2.0] - 2026-03-08
 
 ### Added
