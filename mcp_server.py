@@ -128,8 +128,7 @@ def attest_action(
     body_bytes = len(json.dumps(body))
     if body_bytes > _MAX_PAYLOAD_BYTES:
         return (
-            f"Error: request payload exceeds "
-            f"{_MAX_PAYLOAD_BYTES} byte limit ({body_bytes} bytes)"
+            f"Error: request payload exceeds {_MAX_PAYLOAD_BYTES} byte limit ({body_bytes} bytes)"
         )
     try:
         data = _call_api("post", "/v1/attest", json=body)

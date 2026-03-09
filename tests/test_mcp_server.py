@@ -25,8 +25,10 @@ class _FakeFastMCP:
 
     def tool(self):
         """Decorator that returns the function unchanged."""
+
         def decorator(fn):
             return fn
+
         return decorator
 
     def run(self):
@@ -193,7 +195,9 @@ def test_call_api_timeout():
 def test_call_api_http_status_error():
     with patch.object(srv, "_client") as mock_client_fn:
         ctx = mock_client_fn.return_value.__enter__.return_value
-        resp = httpx.Response(403, json={"detail": "Forbidden"}, request=httpx.Request("GET", "http://test"))
+        resp = httpx.Response(
+            403, json={"detail": "Forbidden"}, request=httpx.Request("GET", "http://test")
+        )
         ctx.get.side_effect = httpx.HTTPStatusError("403", response=resp, request=resp.request)
         with pytest.raises(srv.SigilAPIError, match="403"):
             srv._call_api("get", "/v1/test")

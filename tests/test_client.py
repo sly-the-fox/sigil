@@ -135,9 +135,7 @@ async def test_async_verify():
 def test_error_body_truncated(client: SigilClient):
     """Long non-JSON error bodies are truncated to 200 chars."""
     long_body = "x" * 500
-    respx.post(f"{BASE_URL}/v1/attest").mock(
-        return_value=httpx.Response(500, text=long_body)
-    )
+    respx.post(f"{BASE_URL}/v1/attest").mock(return_value=httpx.Response(500, text=long_body))
     with pytest.raises(SigilError) as exc_info:
         client.attest("test")
     # The detail should be at most 200 chars, not the full 500

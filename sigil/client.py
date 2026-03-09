@@ -149,7 +149,6 @@ class SigilClient:
         return Chain(agent_id=data["agent_id"], length=data["length"], receipts=receipts)
 
 
-
 class AsyncSigilClient:
     """Asynchronous Sigil API client."""
 
@@ -203,4 +202,3 @@ class AsyncSigilClient:
         data = _handle_response(resp)
         receipts = [_parse_receipt(r) for r in data["receipts"]]
         return Chain(agent_id=data["agent_id"], length=data["length"], receipts=receipts)
-
