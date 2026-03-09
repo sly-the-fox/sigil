@@ -1,0 +1,28 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required: [apiKey]
+    properties:
+      apiKey:
+        type: string
+        description: "Sigil API key (starts with sg_)"
+      apiUrl:
+        type: string
+        description: "Sigil Notary API base URL"
+        default: "http://localhost:8100"
+      agentId:
+        type: string
+        description: "Agent identity for chain queries"
+  commandFunction: |
+    (config) => ({
+      command: 'uvx',
+      args: ['sigil-notary'],
+      env: {
+        SIGIL_API_KEY: config.apiKey,
+        ...(config.apiUrl ? { SIGIL_API_URL: config.apiUrl } : {}),
+        ...(config.agentId ? { SIGIL_AGENT_ID: config.agentId } : {})
+      }
+    })
+  exampleConfig:
+    apiKey: "sg_your_key_here"
