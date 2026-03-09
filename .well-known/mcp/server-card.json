@@ -1,0 +1,60 @@
+{
+  "name": "sigil-notary",
+  "description": "Tamper-evident, hash-chained audit trails for AI agents with Ed25519 signatures",
+  "version": "0.2.0",
+  "tools": [
+    {
+      "name": "attest_action",
+      "description": "Record an action and get a signed, hash-chained receipt",
+      "inputSchema": {
+        "type": "object",
+        "required": ["action_type", "action_summary"],
+        "properties": {
+          "action_type": {
+            "type": "string",
+            "description": "Category of action (e.g. tool_call, file_write, api_request, decision)"
+          },
+          "action_summary": {
+            "type": "string",
+            "description": "Human-readable description of what happened"
+          },
+          "payload": {
+            "type": "object",
+            "description": "Optional structured data about the action"
+          }
+        }
+      }
+    },
+    {
+      "name": "verify_receipt",
+      "description": "Verify a receipt's signature and chain integrity",
+      "inputSchema": {
+        "type": "object",
+        "required": ["receipt_id"],
+        "properties": {
+          "receipt_id": {
+            "type": "string",
+            "description": "UUID of the receipt to verify"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_chain",
+      "description": "Retrieve the audit trail for this agent",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of receipts to return (default 100, max 1000)"
+          },
+          "after_seq": {
+            "type": "integer",
+            "description": "Return receipts after this sequence number (pagination)"
+          }
+        }
+      }
+    }
+  ]
+}
